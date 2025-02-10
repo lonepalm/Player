@@ -28,6 +28,7 @@ import UIKit
 import Foundation
 import AVFoundation
 import CoreGraphics
+import os
 
 // MARK: - error types
 
@@ -356,6 +357,7 @@ open class Player: UIViewController {
 
     internal var _playerObservers = [NSKeyValueObservation]()
     internal var _playerItemObservers = [NSKeyValueObservation]()
+    internal var _playerItemObserversLock = os_unfair_lock()
     internal var _playerLayerObserver: NSKeyValueObservation?
     internal var _playerTimeObserver: Any?
 
@@ -779,6 +781,8 @@ extension Player {
             return
         }
 
+        os_unfair_lock_lock(&self._playerItemObserversLock)
+        
         self._playerItemObservers.append(playerItem.observe(\.isPlaybackBufferEmpty, options: [.new, .old]) { [weak self] (object, change) in
             if object.isPlaybackBufferEmpty {
                 self?.bufferingState = .delayed
@@ -839,13 +843,17 @@ extension Player {
                 strongSelf.play()
             }
         })
+        
+        os_unfair_lock_unlock(&self._playerItemObserversLock)
     }
 
     internal func removePlayerItemObservers() {
+        os_unfair_lock_lock(&self._playerItemObserversLock)
         for observer in self._playerItemObservers {
             observer.invalidate()
         }
         self._playerItemObservers.removeAll()
+        os_unfair_lock_unlock(&self._playerItemObserversLock)
     }
 
     // MARK: - AVPlayerLayerObservers
